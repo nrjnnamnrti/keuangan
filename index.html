@@ -53,20 +53,24 @@
     </main>
 
     <!-- Bottom Navigation -->
-    <nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto glass-nav rounded-t-[2rem] shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)] border-t border-gray-100 flex justify-between px-6 py-4 z-50">
-        <button class="nav-btn flex flex-col items-center gap-1 text-primary w-16" data-tab="beranda">
+    <nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto glass-nav rounded-t-[2rem] shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)] border-t border-gray-100 flex justify-between px-3 py-4 z-50">
+        <button class="nav-btn flex flex-col items-center gap-1 text-primary w-1/5" data-tab="beranda">
             <i data-lucide="home" class="w-6 h-6"></i>
             <span class="text-[10px] font-semibold">Beranda</span>
         </button>
-        <button class="nav-btn flex flex-col items-center gap-1 text-gray-400 hover:text-primary transition-colors w-16" data-tab="catat">
+        <button class="nav-btn flex flex-col items-center gap-1 text-gray-400 hover:text-primary transition-colors w-1/5" data-tab="catat">
             <i data-lucide="plus-circle" class="w-6 h-6"></i>
             <span class="text-[10px] font-semibold">Catat</span>
         </button>
-        <button class="nav-btn flex flex-col items-center gap-1 text-gray-400 hover:text-primary transition-colors w-16" data-tab="riwayat">
+        <button class="nav-btn flex flex-col items-center gap-1 text-gray-400 hover:text-primary transition-colors w-1/5" data-tab="tabungan">
+            <i data-lucide="credit-card" class="w-6 h-6"></i>
+            <span class="text-[10px] font-semibold">Tabungan</span>
+        </button>
+        <button class="nav-btn flex flex-col items-center gap-1 text-gray-400 hover:text-primary transition-colors w-1/5" data-tab="riwayat">
             <i data-lucide="clock" class="w-6 h-6"></i>
             <span class="text-[10px] font-semibold">Riwayat</span>
         </button>
-        <button class="nav-btn flex flex-col items-center gap-1 text-gray-400 hover:text-primary transition-colors w-16" data-tab="profil">
+        <button class="nav-btn flex flex-col items-center gap-1 text-gray-400 hover:text-primary transition-colors w-1/5" data-tab="profil">
             <i data-lucide="user" class="w-6 h-6"></i>
             <span class="text-[10px] font-semibold">Profil</span>
         </button>
@@ -87,22 +91,20 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Konfigurasi Firebase
-        // Catatan: Jika di-deploy di GitHub, pengguna harus mengganti ini dengan config Firebase milik mereka sendiri.
         let firebaseConfig;
         if (typeof __firebase_config !== 'undefined') {
             firebaseConfig = JSON.parse(__firebase_config);
         } else {
-            // Placeholder untuk deployment eksternal (GitHub)
             firebaseConfig = {
-                apiKey: "GANTI_DENGAN_API_KEY_ANDA",
-                authDomain: "GANTI_DENGAN_AUTH_DOMAIN_ANDA",
-                projectId: "GANTI_DENGAN_PROJECT_ID_ANDA",
-                storageBucket: "GANTI_DENGAN_STORAGE_BUCKET_ANDA",
-                messagingSenderId: "GANTI_DENGAN_SENDER_ID_ANDA",
-                appId: "GANTI_DENGAN_APP_ID_ANDA"
+                apiKey: "AIzaSyB0KCnGcUT21bbIfeDEXyTjmE4QHYkPXMI",
+                authDomain: "keuangan-7d7cb.firebaseapp.com",
+                projectId: "keuangan-7d7cb",
+                storageBucket: "keuangan-7d7cb.firebasestorage.app",
+                messagingSenderId: "525596980737",
+                appId: "1:525596980737:web:052efa8e99b3e9ac8d7200"
             };
         }
 
@@ -120,18 +122,19 @@
         // State Aplikasi
         let isFirebaseReady = false;
         let authUser = null;
-        let currentView = 'login'; // login, register, beranda, catat, riwayat, profil
+        let currentView = 'login'; 
         let activeTab = 'beranda';
         
         // Data State
         let allFamilies = [];
         let allMembers = [];
         let allTransactions = [];
+        let allCategories = []; // State untuk Kategori
         let currentFamily = null;
         let currentMember = null;
         
         // Listeners
-        let unsubFamilies, unsubMembers, unsubTransactions;
+        let unsubFamilies, unsubMembers, unsubTransactions, unsubCategories;
 
         // DOM Elements
         const appContainer = document.getElementById('app-container');
@@ -146,15 +149,67 @@
             return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
         };
 
+        // Modal Custom & Alerts
+        window.closeModal = () => {
+            const modal = document.getElementById('global-modal');
+            if(modal) modal.classList.add('hidden');
+        };
+
+        const showModal = (contentHTML) => {
+            let modal = document.getElementById('global-modal');
+            if(!modal) {
+                modal = document.createElement('div');
+                modal.id = 'global-modal';
+                modal.className = 'fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]';
+                document.body.appendChild(modal);
+            }
+            modal.innerHTML = `
+                <div class="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl transform scale-100 transition-all">
+                    ${contentHTML}
+                </div>
+            `;
+            modal.classList.remove('hidden');
+            lucide.createIcons();
+        };
+
+        const customAlert = (msg) => {
+            showModal(`
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-500">
+                        <i data-lucide="info" class="w-8 h-8"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Informasi</h3>
+                    <p class="text-sm text-gray-600 mb-6">${msg}</p>
+                    <button onclick="window.closeModal()" class="w-full bg-primary hover:bg-primaryDark text-white font-medium py-3 rounded-2xl transition-colors">Tutup</button>
+                </div>
+            `);
+        };
+
+        const customConfirm = (msg, onConfirm) => {
+            window.pendingConfirm = onConfirm;
+            showModal(`
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+                        <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Konfirmasi</h3>
+                    <p class="text-sm text-gray-600 mb-6">${msg}</p>
+                    <div class="flex gap-3">
+                        <button onclick="window.closeModal()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-2xl transition-colors">Batal</button>
+                        <button onclick="window.closeModal(); if(window.pendingConfirm) window.pendingConfirm();" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-3 rounded-2xl transition-colors">Ya, Lanjutkan</button>
+                    </div>
+                </div>
+            `);
+        };
+
         // Initialize App
         const initApp = async () => {
             if(!auth) {
-                renderError("Firebase belum dikonfigurasi. Ganti firebaseConfig di kode jika di GitHub.");
+                renderError("Firebase belum dikonfigurasi.");
                 return;
             }
 
             try {
-                // Aturan 3: Auth Sebelum Query
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
@@ -167,10 +222,8 @@
                         isFirebaseReady = true;
                         setupRealtimeListeners();
                         
-                        // Cek session login sederhana (Simpan email terakhir di localStorage untuk kemudahan)
                         const savedEmail = localStorage.getItem('keluargaApp_email');
                         if (savedEmail) {
-                            // Tunggu data terload sebentar
                             setTimeout(() => attemptLogin(savedEmail), 1000);
                         } else {
                             renderAuth('login');
@@ -183,13 +236,14 @@
             }
         };
 
-        // Realtime Listeners (Aturan 1 & 2: Path ketat & tanpa query kompleks, filter di JS)
+        // Realtime Listeners
         const setupRealtimeListeners = () => {
             if (!authUser) return;
 
             const familiesRef = collection(db, 'artifacts', appId, 'public', 'data', 'families');
             const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'members');
             const txRef = collection(db, 'artifacts', appId, 'public', 'data', 'transactions');
+            const catRef = collection(db, 'artifacts', appId, 'public', 'data', 'categories'); // Referensi Kategori
 
             unsubFamilies = onSnapshot(familiesRef, (snapshot) => {
                 allFamilies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -203,15 +257,18 @@
 
             unsubTransactions = onSnapshot(txRef, (snapshot) => {
                 allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Sort descending by date in memory (aturan 2 fallback)
                 allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+                updateUIIfLoggedIn();
+            }, (err) => console.error(err));
+
+            unsubCategories = onSnapshot(catRef, (snapshot) => {
+                allCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 updateUIIfLoggedIn();
             }, (err) => console.error(err));
         };
 
         const updateUIIfLoggedIn = () => {
             if (currentMember && currentFamily) {
-                // Refresh data if updated
                 currentMember = allMembers.find(m => m.id === currentMember.id) || null;
                 currentFamily = allFamilies.find(f => f.id === currentFamily.id) || null;
                 if(currentView !== 'login' && currentView !== 'register') {
@@ -220,7 +277,7 @@
             }
         };
 
-        // --- AUTHENTICATION LOGIC ---
+        // --- AUTHENTICATION & DATA LOGIC ---
 
         const attemptLogin = (email) => {
             const member = allMembers.find(m => m.email.toLowerCase() === email.toLowerCase());
@@ -242,21 +299,20 @@
             if (!authUser) return;
             showLoadingOverlay();
             try {
-                // Cek jika email sudah terdaftar
                 if (allMembers.find(m => m.email.toLowerCase() === email.toLowerCase())) {
-                    alert("Email sudah terdaftar!");
+                    customAlert("Email sudah terdaftar!");
                     hideLoadingOverlay();
                     return;
                 }
 
-                // 1. Buat Keluarga Baru
+                // 1. Buat Keluarga
                 const familiesRef = collection(db, 'artifacts', appId, 'public', 'data', 'families');
                 const familyDoc = await addDoc(familiesRef, {
                     name: familyName,
                     createdAt: new Date().toISOString()
                 });
 
-                // 2. Buat Anggota Pertama (sebagai pendaftar/kepala)
+                // 2. Buat Anggota
                 const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'members');
                 await addDoc(membersRef, {
                     familyId: familyDoc.id,
@@ -267,27 +323,45 @@
                     createdAt: new Date().toISOString()
                 });
 
-                // Login otomatis
+                // 3. Buat Kategori Default agar aplikasi tidak kosong
+                const catRef = collection(db, 'artifacts', appId, 'public', 'data', 'categories');
+                const defaultCategories = [
+                    { name: 'Gaji / Pendapatan', type: 'pemasukan' },
+                    { name: 'Makanan & Minuman', type: 'pengeluaran' },
+                    { name: 'Transportasi', type: 'pengeluaran' },
+                    { name: 'Tagihan Listrik/Air', type: 'pengeluaran' },
+                    { name: 'Pendidikan', type: 'pengeluaran' },
+                    { name: 'Dana Darurat', type: 'tabungan' },
+                    { name: 'Pendidikan Anak', type: 'tabungan' }
+                ];
+                
+                for(let cat of defaultCategories) {
+                    await addDoc(catRef, {
+                        familyId: familyDoc.id,
+                        name: cat.name,
+                        type: cat.type,
+                        createdAt: new Date().toISOString()
+                    });
+                }
+
                 setTimeout(() => {
                     attemptLogin(email);
                     hideLoadingOverlay();
-                }, 1000); // Tunggu snapshot
+                }, 1000);
 
             } catch (error) {
                 console.error("Register err:", error);
-                alert("Terjadi kesalahan.");
+                customAlert("Terjadi kesalahan.");
                 hideLoadingOverlay();
             }
         };
 
         const handleAddMember = async (email, name, dob, status) => {
             if (!authUser || !currentFamily) return;
-            
             if (allMembers.find(m => m.email.toLowerCase() === email.toLowerCase())) {
-                alert("Email anggota ini sudah terdaftar!");
+                customAlert("Email anggota ini sudah terdaftar!");
                 return;
             }
-
             showLoadingOverlay();
             try {
                 const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'members');
@@ -299,16 +373,35 @@
                     status: status,
                     createdAt: new Date().toISOString()
                 });
-                alert("Anggota berhasil ditambahkan!");
-                renderMainApp('profil'); // Refresh view
+                customAlert("Anggota berhasil ditambahkan!");
             } catch (error) {
                 console.error(error);
-                alert("Gagal menambah anggota.");
+                customAlert("Gagal menambah anggota.");
             }
             hideLoadingOverlay();
         };
 
-        const handleAddTransaction = async (type, amount, date, description) => {
+        // Fungsi Tambah Kategori Baru
+        const handleAddCategory = async (name, type) => {
+            if (!authUser || !currentFamily) return;
+            showLoadingOverlay();
+            try {
+                const catRef = collection(db, 'artifacts', appId, 'public', 'data', 'categories');
+                await addDoc(catRef, {
+                    familyId: currentFamily.id,
+                    name: name,
+                    type: type,
+                    createdAt: new Date().toISOString()
+                });
+                customAlert("Kategori berhasil ditambahkan!");
+            } catch (error) {
+                console.error(error);
+                customAlert("Gagal menambah kategori.");
+            }
+            hideLoadingOverlay();
+        };
+
+        const handleAddTransaction = async (type, category, amount, date, description, redirectTab = 'beranda') => {
              if (!authUser || !currentFamily || !currentMember) return;
              showLoadingOverlay();
              try {
@@ -317,20 +410,105 @@
                     familyId: currentFamily.id,
                     memberId: currentMember.id,
                     memberName: currentMember.name,
-                    type: type, // 'pemasukan' atau 'pengeluaran'
+                    type: type,
+                    category: category, // Simpan kategori
                     amount: Number(amount),
                     date: date,
                     description: description,
                     createdAt: new Date().toISOString()
                 });
-                alert("Transaksi berhasil dicatat!");
-                activeTab = 'beranda';
-                renderMainApp('beranda');
+                customAlert("Transaksi berhasil dicatat!");
+                activeTab = redirectTab;
+                renderMainApp(redirectTab);
              } catch(e) {
                  console.error(e);
-                 alert("Gagal mencatat transaksi.");
+                 customAlert("Gagal mencatat transaksi.");
              }
              hideLoadingOverlay();
+        };
+
+        const handleEditTransaction = (txId) => {
+            const tx = allTransactions.find(t => t.id === txId);
+            if(!tx) return;
+
+            // Dapatkan tipe kategori untuk difilter
+            let filterType = tx.type;
+            if(tx.type === 'tabungan_masuk' || tx.type === 'tabungan_keluar') filterType = 'tabungan';
+            
+            let catOptions = '';
+            allCategories.filter(c => c.familyId === currentFamily.id && c.type === filterType).forEach(c => {
+                catOptions += `<option value="${c.name}" ${tx.category === c.name ? 'selected' : ''}>${c.name}</option>`;
+            });
+
+            if(catOptions === '') catOptions = `<option value="${tx.category}" selected>${tx.category}</option>`;
+
+            showModal(`
+                <h3 class="text-xl font-bold text-gray-800 mb-4 text-left">Edit Transaksi</h3>
+                <form id="form-edit-tx" class="text-left">
+                    <input type="hidden" id="edit-tx-id" value="${tx.id}">
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-600 mb-1 ml-1">Kategori</label>
+                        <select id="edit-tx-cat" required class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                            ${catOptions}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-600 mb-1 ml-1">Nominal (Rp)</label>
+                        <input type="number" id="edit-tx-amount" required min="1" value="${tx.amount}" class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 font-bold">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-600 mb-1 ml-1">Keterangan</label>
+                        <input type="text" id="edit-tx-desc" required value="${tx.description}" class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-600 mb-1 ml-1">Tanggal</label>
+                        <input type="date" id="edit-tx-date" required value="${tx.date}" class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="window.closeModal()" class="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-semibold">Batal</button>
+                        <button type="submit" class="flex-1 bg-primary text-white py-2 rounded-xl text-sm font-semibold">Simpan</button>
+                    </div>
+                </form>
+            `);
+
+            document.getElementById('form-edit-tx').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newCat = document.getElementById('edit-tx-cat').value;
+                const newAmount = Number(document.getElementById('edit-tx-amount').value);
+                const newDesc = document.getElementById('edit-tx-desc').value;
+                const newDate = document.getElementById('edit-tx-date').value;
+                
+                showLoadingOverlay();
+                try {
+                    const txRef = doc(db, 'artifacts', appId, 'public', 'data', 'transactions', txId);
+                    await updateDoc(txRef, {
+                        category: newCat,
+                        amount: newAmount,
+                        description: newDesc,
+                        date: newDate
+                    });
+                    window.closeModal();
+                    customAlert("Transaksi berhasil diperbarui!");
+                } catch(error) {
+                    console.error(error);
+                    customAlert("Gagal memperbarui transaksi.");
+                }
+                hideLoadingOverlay();
+            });
+        };
+
+        const confirmDeleteTransaction = (txId) => {
+            customConfirm("Apakah Anda yakin ingin menghapus transaksi ini? Data yang dihapus tidak dapat dikembalikan.", async () => {
+                showLoadingOverlay();
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'transactions', txId));
+                    customAlert("Transaksi berhasil dihapus!");
+                } catch(error) {
+                    console.error(error);
+                    customAlert("Gagal menghapus transaksi.");
+                }
+                hideLoadingOverlay();
+            });
         };
 
         const logout = () => {
@@ -343,6 +521,7 @@
         // --- RENDERERS ---
 
         const renderAuth = (type) => {
+            // (Kode Auth tetap sama seperti sebelumnya)
             currentView = type;
             bottomNav.classList.add('hidden');
             
@@ -356,7 +535,6 @@
                             <h1 class="text-3xl font-bold text-gray-800 tracking-tight">Keluarga<span class="text-primary">App</span></h1>
                             <p class="text-sm text-gray-500 mt-2">Kelola Keuangan Keluarga Bersama</p>
                         </div>
-
                         <form id="login-form" class="bg-white p-6 rounded-[2rem] shadow-card">
                             <h2 class="text-xl font-semibold mb-6">Masuk</h2>
                             <div class="mb-4">
@@ -367,7 +545,6 @@
                                 Masuk Aplikasi
                             </button>
                         </form>
-                        
                         <p class="text-center mt-6 text-sm text-gray-500">
                             Keluarga belum terdaftar? 
                             <button onclick="document.dispatchEvent(new CustomEvent('changeView', {detail: 'register'}))" class="text-primary font-semibold hover:underline">Daftar Sekarang</button>
@@ -380,7 +557,6 @@
                         <div class="text-center mb-6">
                             <h1 class="text-2xl font-bold text-gray-800">Daftar Keluarga Baru</h1>
                         </div>
-
                         <form id="register-form" class="bg-white p-6 rounded-[2rem] shadow-card">
                             <div class="mb-4">
                                 <label class="block text-sm font-medium text-gray-600 mb-1 ml-2">Nama Keluarga</label>
@@ -398,7 +574,6 @@
                                 Daftarkan Keluarga
                             </button>
                         </form>
-                        
                         <p class="text-center mt-6 text-sm text-gray-500">
                             Sudah punya akun? 
                             <button onclick="document.dispatchEvent(new CustomEvent('changeView', {detail: 'login'}))" class="text-primary font-semibold hover:underline">Masuk</button>
@@ -415,36 +590,63 @@
             bottomNav.classList.remove('hidden');
             updateNavUI(tab);
             
-            // Get family transactions (Filter in memory - Rule 2)
             const familyTx = allTransactions.filter(t => t.familyId === currentFamily.id);
             const familyMembers = allMembers.filter(m => m.familyId === currentFamily.id);
+            const familyCategories = allCategories.filter(c => c.familyId === currentFamily.id);
+
+            // Perhitungan Saldo Global
+            const pemasukan = familyTx.filter(t => t.type === 'pemasukan').reduce((sum, t) => sum + t.amount, 0);
+            const pengeluaranKas = familyTx.filter(t => t.type === 'pengeluaran').reduce((sum, t) => sum + t.amount, 0);
+            const tabunganMasuk = familyTx.filter(t => t.type === 'tabungan_masuk').reduce((sum, t) => sum + t.amount, 0);
+            const tabunganKeluar = familyTx.filter(t => t.type === 'tabungan_keluar').reduce((sum, t) => sum + t.amount, 0);
+            
+            // Perubahan: Tabungan keluar sekarang murni pengeluaran, tidak kembali ke Kas
+            const saldoKas = pemasukan - pengeluaranKas - tabunganMasuk;
+            const totalPengeluaran = pengeluaranKas + tabunganKeluar; 
+            const saldoTabungan = tabunganMasuk - tabunganKeluar;
 
             let contentHTML = '';
 
             if (tab === 'beranda') {
-                const pemasukan = familyTx.filter(t => t.type === 'pemasukan').reduce((sum, t) => sum + t.amount, 0);
-                const pengeluaran = familyTx.filter(t => t.type === 'pengeluaran').reduce((sum, t) => sum + t.amount, 0);
-                const saldo = pemasukan - pengeluaran;
-
-                // Transaksi terbaru (max 5)
                 const recentTx = familyTx.slice(0, 5);
                 let txListHTML = recentTx.length === 0 ? `<p class="text-sm text-gray-400 text-center py-4">Belum ada transaksi</p>` : '';
                 recentTx.forEach(tx => {
-                    const isIncome = tx.type === 'pemasukan';
+                    let textClass = 'text-gray-800';
+                    let sign = '';
+                    let iconClass = '';
+                    let iconName = '';
+
+                    // Menyesuaikan style jika tabungan keluar kini adalah pengeluaran
+                    if (tx.type === 'pemasukan') {
+                        textClass = 'text-green-600'; sign = '+'; iconClass = 'bg-green-100 text-green-600'; iconName = 'arrow-down-left';
+                    } else if (tx.type === 'pengeluaran') {
+                        textClass = 'text-red-500'; sign = '-'; iconClass = 'bg-red-100 text-red-500'; iconName = 'arrow-up-right';
+                    } else if (tx.type === 'tabungan_masuk') {
+                        textClass = 'text-blue-500'; sign = '-'; iconClass = 'bg-blue-100 text-blue-500'; iconName = 'credit-card';
+                    } else if (tx.type === 'tabungan_keluar') {
+                        textClass = 'text-red-500'; sign = '-'; iconClass = 'bg-red-100 text-red-500'; iconName = 'credit-card';
+                    }
+
                     txListHTML += `
-                        <div class="flex items-center justify-between p-3 bg-cream/30 rounded-2xl mb-2">
+                        <div class="flex items-center justify-between p-3 bg-cream/30 rounded-2xl mb-2 group">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full flex items-center justify-center ${isIncome ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}">
-                                    <i data-lucide="${isIncome ? 'arrow-down-left' : 'arrow-up-right'}" class="w-5 h-5"></i>
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center ${iconClass}">
+                                    <i data-lucide="${iconName}" class="w-5 h-5"></i>
                                 </div>
                                 <div>
                                     <p class="text-sm font-semibold text-gray-800">${tx.description}</p>
-                                    <p class="text-xs text-gray-500">${tx.memberName} • ${formatDate(tx.date)}</p>
+                                    <p class="text-[10px] text-gray-500">${tx.category || 'Umum'} • ${tx.memberName}</p>
                                 </div>
                             </div>
-                            <span class="text-sm font-bold ${isIncome ? 'text-green-600' : 'text-red-500'}">
-                                ${isIncome ? '+' : '-'}${formatRp(tx.amount)}
-                            </span>
+                            <div class="flex flex-col items-end">
+                                <span class="text-sm font-bold ${textClass}">
+                                    ${sign}${formatRp(tx.amount)}
+                                </span>
+                                <div class="flex gap-2 mt-1">
+                                    <button onclick="document.dispatchEvent(new CustomEvent('editTx', {detail: '${tx.id}'}))" class="text-gray-400 hover:text-blue-500"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="document.dispatchEvent(new CustomEvent('deleteTx', {detail: '${tx.id}'}))" class="text-gray-400 hover:text-red-500"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                </div>
+                            </div>
                         </div>
                     `;
                 });
@@ -460,13 +662,11 @@
                                 ${currentMember.name.charAt(0).toUpperCase()}
                             </div>
                         </header>
-
-                        <!-- Balance Card -->
-                        <div class="bg-primary rounded-[2rem] p-6 text-white shadow-soft relative overflow-hidden mb-6">
+                        
+                        <div class="bg-primary rounded-[2rem] p-6 text-white shadow-soft relative overflow-hidden mb-4">
                             <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-xl"></div>
-                            <p class="text-sm font-medium text-white/80 mb-1">Total Saldo</p>
-                            <h3 class="text-3xl font-bold mb-6">${formatRp(saldo)}</h3>
-                            
+                            <p class="text-sm font-medium text-white/80 mb-1">Saldo Kas Tersedia</p>
+                            <h3 class="text-3xl font-bold mb-6">${formatRp(saldoKas)}</h3>
                             <div class="flex justify-between">
                                 <div>
                                     <p class="text-xs text-white/70 mb-1 flex items-center gap-1"><i data-lucide="arrow-down-left" class="w-3 h-3"></i> Pemasukan</p>
@@ -474,12 +674,25 @@
                                 </div>
                                 <div>
                                     <p class="text-xs text-white/70 mb-1 flex items-center gap-1"><i data-lucide="arrow-up-right" class="w-3 h-3"></i> Pengeluaran</p>
-                                    <p class="font-semibold text-sm">${formatRp(pengeluaran)}</p>
+                                    <p class="font-semibold text-sm">${formatRp(totalPengeluaran)}</p>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Recent Transactions -->
+                        <!-- Card Tabungan (Pintasan) -->
+                        <div class="bg-blue-50 rounded-2xl p-4 mb-6 flex justify-between items-center border border-blue-100 cursor-pointer" onclick="document.dispatchEvent(new CustomEvent('changeView', {detail: 'tabungan'}))">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-500">
+                                    <i data-lucide="credit-card" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500 font-medium">Total Tabungan</p>
+                                    <p class="text-lg font-bold text-blue-600">${formatRp(saldoTabungan)}</p>
+                                </div>
+                            </div>
+                            <i data-lucide="chevron-right" class="w-5 h-5 text-gray-400"></i>
+                        </div>
+
                         <div>
                             <div class="flex justify-between items-end mb-4">
                                 <h3 class="font-bold text-gray-800">Transaksi Terbaru</h3>
@@ -493,6 +706,7 @@
                 `;
             } else if (tab === 'catat') {
                 const today = new Date().toISOString().split('T')[0];
+                
                 contentHTML = `
                     <div class="tab-content pb-6 pt-2">
                         <h2 class="text-2xl font-bold text-gray-800 mb-6">Catat Transaksi</h2>
@@ -500,13 +714,13 @@
                             
                             <div class="grid grid-cols-2 gap-3 mb-6">
                                 <label class="cursor-pointer relative">
-                                    <input type="radio" name="tx_type" value="pengeluaran" class="peer sr-only" checked>
+                                    <input type="radio" name="tx_type" value="pengeluaran" id="radio-pengeluaran" class="peer sr-only" checked>
                                     <div class="p-3 text-center rounded-2xl border border-gray-100 bg-cream/50 peer-checked:bg-red-50 peer-checked:border-red-200 peer-checked:text-red-600 transition-all font-semibold text-sm text-gray-500">
                                         Pengeluaran
                                     </div>
                                 </label>
                                 <label class="cursor-pointer relative">
-                                    <input type="radio" name="tx_type" value="pemasukan" class="peer sr-only">
+                                    <input type="radio" name="tx_type" value="pemasukan" id="radio-pemasukan" class="peer sr-only">
                                     <div class="p-3 text-center rounded-2xl border border-gray-100 bg-cream/50 peer-checked:bg-green-50 peer-checked:border-green-200 peer-checked:text-green-600 transition-all font-semibold text-sm text-gray-500">
                                         Pemasukan
                                     </div>
@@ -517,10 +731,17 @@
                                 <label class="block text-sm font-medium text-gray-600 mb-1 ml-2">Nominal (Rp)</label>
                                 <input type="number" id="tx-amount" required min="1" class="w-full bg-cream/50 border border-gray-100 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 font-bold text-lg" placeholder="0">
                             </div>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-600 mb-1 ml-2">Kategori</label>
+                                <select id="tx-category" required class="w-full bg-cream/50 border border-gray-100 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 text-gray-700">
+                                    <!-- Opsi kategori akan diisi oleh Javascript -->
+                                </select>
+                            </div>
                             
                             <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-600 mb-1 ml-2">Keterangan</label>
-                                <input type="text" id="tx-desc" required class="w-full bg-cream/50 border border-gray-100 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Belanja mingguan / Gaji">
+                                <label class="block text-sm font-medium text-gray-600 mb-1 ml-2">Keterangan / Catatan</label>
+                                <input type="text" id="tx-desc" required class="w-full bg-cream/50 border border-gray-100 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Contoh: Beli beras">
                             </div>
 
                             <div class="mb-6">
@@ -534,27 +755,150 @@
                         </form>
                     </div>
                 `;
-            } else if (tab === 'riwayat') {
-                let txListHTML = familyTx.length === 0 ? `<div class="text-center text-gray-400 py-10">Belum ada riwayat transaksi.</div>` : '';
-                
-                // Group by month/year could be done, but keep simple list for now
-                familyTx.forEach(tx => {
-                    const isIncome = tx.type === 'pemasukan';
+            } else if (tab === 'tabungan') {
+                const tabunganTx = familyTx.filter(t => t.type === 'tabungan_masuk' || t.type === 'tabungan_keluar');
+                let txListHTML = tabunganTx.length === 0 ? `<div class="text-center text-gray-400 py-6">Belum ada riwayat tabungan.</div>` : '';
+                tabunganTx.forEach(tx => {
+                    const isMasuk = tx.type === 'tabungan_masuk';
                     txListHTML += `
-                        <div class="flex items-center justify-between p-4 bg-white rounded-2xl mb-3 shadow-sm border border-gray-50">
+                        <div class="flex items-center justify-between p-3 bg-white rounded-2xl mb-2 shadow-sm border border-gray-50">
                             <div class="flex items-center gap-3">
-                                <div class="w-12 h-12 rounded-full flex items-center justify-center ${isIncome ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}">
-                                    <i data-lucide="${isIncome ? 'arrow-down-left' : 'arrow-up-right'}" class="w-6 h-6"></i>
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center ${isMasuk ? 'bg-blue-50 text-blue-500' : 'bg-red-50 text-red-500'}">
+                                    <i data-lucide="${isMasuk ? 'download' : 'credit-card'}" class="w-5 h-5"></i>
                                 </div>
                                 <div>
                                     <p class="text-sm font-bold text-gray-800">${tx.description}</p>
-                                    <p class="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><i data-lucide="user" class="w-3 h-3"></i> ${tx.memberName}</p>
+                                    <p class="text-[10px] text-gray-500">${formatDate(tx.date)} • ${tx.memberName}</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end">
+                                <span class="text-sm font-bold ${isMasuk ? 'text-blue-500' : 'text-red-500'}">
+                                    ${isMasuk ? '+' : '-'}${formatRp(tx.amount)}
+                                </span>
+                                <div class="flex gap-2 mt-1">
+                                    <button onclick="document.dispatchEvent(new CustomEvent('editTx', {detail: '${tx.id}'}))" class="text-gray-400 hover:text-blue-500"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="document.dispatchEvent(new CustomEvent('deleteTx', {detail: '${tx.id}'}))" class="text-gray-400 hover:text-red-500"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                const today = new Date().toISOString().split('T')[0];
+                
+                contentHTML = `
+                    <div class="tab-content pb-6 pt-2">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-6">Tabungan Keluarga</h2>
+                        
+                        <div class="bg-blue-500 rounded-[2rem] p-6 text-white shadow-soft relative overflow-hidden mb-6">
+                            <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-xl"></div>
+                            <p class="text-sm font-medium text-white/80 mb-1 flex items-center gap-2"><i data-lucide="credit-card" class="w-4 h-4"></i> Total Tabungan</p>
+                            <h3 class="text-3xl font-bold mb-2">${formatRp(saldoTabungan)}</h3>
+                            <p class="text-xs text-blue-100">Saldo Kas Tersedia: ${formatRp(saldoKas)}</p>
+                        </div>
+
+                        <div class="bg-white rounded-[2rem] p-5 shadow-card mb-6">
+                            <h3 class="font-bold text-gray-800 mb-4">Input Tabungan</h3>
+                            <form id="form-tabungan">
+                                <div class="grid grid-cols-2 gap-3 mb-4">
+                                    <label class="cursor-pointer relative">
+                                        <input type="radio" name="tab_type" value="tabungan_masuk" class="peer sr-only" checked>
+                                        <div class="p-2 text-center rounded-xl border border-gray-100 bg-cream/50 peer-checked:bg-blue-50 peer-checked:border-blue-200 peer-checked:text-blue-600 transition-all font-semibold text-xs text-gray-500">
+                                            Simpan (Uang Masuk)
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer relative">
+                                        <input type="radio" name="tab_type" value="tabungan_keluar" class="peer sr-only">
+                                        <div class="p-2 text-center rounded-xl border border-gray-100 bg-cream/50 peer-checked:bg-red-50 peer-checked:border-red-200 peer-checked:text-red-600 transition-all font-semibold text-xs text-gray-500">
+                                            Pakai (Pengeluaran)
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div class="space-y-3 mb-4">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1 ml-1">Kategori Tabungan</label>
+                                        <select id="tab-category" required class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-gray-700">
+                                            <!-- Opsi kategori akan diisi oleh Javascript -->
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1 ml-1">Nominal (Rp)</label>
+                                        <input type="number" id="tab-amount" required min="1" class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 font-bold" placeholder="0">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1 ml-1">Keterangan</label>
+                                        <input type="text" id="tab-desc" required class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Contoh: Tabungan pendidikan">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1 ml-1">Tanggal</label>
+                                        <input type="date" id="tab-date" required value="${today}" class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                                    </div>
+                                </div>
+                                <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-xl transition-colors shadow-sm text-sm">
+                                    Proses Tabungan
+                                </button>
+                            </form>
+                        </div>
+
+                        <h3 class="font-bold text-gray-800 mb-3">Riwayat Tabungan</h3>
+                        <div>
+                            ${txListHTML}
+                        </div>
+                    </div>
+                `;
+            } else if (tab === 'riwayat') {
+                let txListHTML = familyTx.length === 0 ? `<div class="text-center text-gray-400 py-10">Belum ada riwayat transaksi.</div>` : '';
+                
+                familyTx.forEach(tx => {
+                    let iconClass = '';
+                    let iconName = '';
+                    let sign = '';
+                    let textClass = '';
+
+                    if (tx.type === 'pemasukan') {
+                        iconClass = 'bg-green-50 text-green-600';
+                        iconName = 'arrow-down-left';
+                        sign = '+';
+                        textClass = 'text-green-600';
+                    } else if (tx.type === 'pengeluaran') {
+                        iconClass = 'bg-red-50 text-red-500';
+                        iconName = 'arrow-up-right';
+                        sign = '-';
+                        textClass = 'text-red-500';
+                    } else if (tx.type === 'tabungan_masuk') {
+                        iconClass = 'bg-blue-50 text-blue-500';
+                        iconName = 'credit-card';
+                        sign = '-'; 
+                        textClass = 'text-blue-500';
+                    } else if (tx.type === 'tabungan_keluar') {
+                        iconClass = 'bg-red-50 text-red-500';
+                        iconName = 'credit-card';
+                        sign = '-';
+                        textClass = 'text-red-500';
+                    }
+
+                    txListHTML += `
+                        <div class="flex items-center justify-between p-4 bg-white rounded-2xl mb-3 shadow-sm border border-gray-50">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-full flex items-center justify-center ${iconClass}">
+                                    <i data-lucide="${iconName}" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-bold text-gray-800">${tx.description}</p>
+                                    <p class="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><i data-lucide="tag" class="w-3 h-3"></i> ${tx.category || 'Tabungan'} • ${tx.memberName}</p>
                                     <p class="text-[10px] text-gray-400 mt-0.5">${formatDate(tx.date)}</p>
                                 </div>
                             </div>
-                            <span class="text-sm font-bold ${isIncome ? 'text-green-600' : 'text-red-500'}">
-                                ${isIncome ? '+' : '-'}${formatRp(tx.amount)}
-                            </span>
+                            <div class="flex flex-col items-end">
+                                <span class="text-sm font-bold ${textClass}">
+                                    ${sign}${formatRp(tx.amount)}
+                                </span>
+                                <div class="flex gap-2 mt-2">
+                                    <button onclick="document.dispatchEvent(new CustomEvent('editTx', {detail: '${tx.id}'}))" class="text-gray-400 hover:text-blue-500 bg-gray-50 px-2 py-1 rounded-lg"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="document.dispatchEvent(new CustomEvent('deleteTx', {detail: '${tx.id}'}))" class="text-gray-400 hover:text-red-500 bg-gray-50 px-2 py-1 rounded-lg"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                </div>
+                            </div>
                         </div>
                     `;
                 });
@@ -572,7 +916,7 @@
                 familyMembers.forEach(m => {
                     membersListHTML += `
                         <div class="flex items-center gap-4 p-3 bg-cream/40 rounded-2xl mb-2">
-                            <div class="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center text-primary font-bold text-lg">
+                            <div class="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center text-primary font-bold">
                                 ${m.name.charAt(0).toUpperCase()}
                             </div>
                             <div>
@@ -583,6 +927,27 @@
                     `;
                 });
 
+                // HTML Kategori
+                let categoriesListHTML = '';
+                familyCategories.forEach(c => {
+                    let badgeClass = '';
+                    let icon = '';
+                    if (c.type === 'pemasukan') {
+                        badgeClass = 'bg-green-50 border-green-100 text-green-700'; icon = 'plus';
+                    } else if (c.type === 'pengeluaran') {
+                        badgeClass = 'bg-red-50 border-red-100 text-red-700'; icon = 'minus';
+                    } else if (c.type === 'tabungan') {
+                        badgeClass = 'bg-blue-50 border-blue-100 text-blue-700'; icon = 'credit-card';
+                    }
+                    
+                    categoriesListHTML += `
+                        <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border mb-2 mr-1 text-xs font-semibold ${badgeClass}">
+                            <i data-lucide="${icon}" class="w-3 h-3"></i> ${c.name}
+                        </div>
+                    `;
+                });
+                if(familyCategories.length === 0) categoriesListHTML = `<p class="text-xs text-gray-400">Belum ada kategori.</p>`;
+
                 contentHTML = `
                     <div class="tab-content pb-6 pt-2">
                         <div class="text-center mb-6">
@@ -590,20 +955,20 @@
                                 <i data-lucide="users" class="w-10 h-10 text-primary"></i>
                             </div>
                             <h2 class="text-xl font-bold text-gray-800">Keluarga ${currentFamily.name}</h2>
-                            <p class="text-xs text-gray-500 mt-1">${familyMembers.length} Anggota Terdaftar</p>
                         </div>
 
-                        <div class="bg-white rounded-[2rem] p-5 shadow-card mb-6">
-                            <h3 class="font-bold text-gray-800 mb-4">Anggota Keluarga</h3>
+                        <!-- Panel Anggota -->
+                        <div class="bg-white rounded-[2rem] p-5 shadow-card mb-4">
+                            <h3 class="font-bold text-gray-800 mb-4 flex justify-between items-center">
+                                Anggota Keluarga <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">${familyMembers.length}</span>
+                            </h3>
                             ${membersListHTML}
                             
                             <button id="btn-show-add-member" class="w-full mt-2 py-3 rounded-2xl border-2 border-dashed border-gray-200 text-gray-500 font-semibold text-sm hover:border-primary hover:text-primary transition-colors">
                                 + Tambah Anggota Baru
                             </button>
                             
-                            <!-- Form Tambah Anggota (Hidden by default) -->
                             <form id="form-add-member" class="hidden mt-4 pt-4 border-t border-gray-100">
-                                <h4 class="text-sm font-bold mb-3">Data Anggota Baru</h4>
                                 <div class="space-y-3 mb-4">
                                     <input type="text" id="new-name" required placeholder="Nama Lengkap" class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
                                     <input type="email" id="new-email" required placeholder="Email" class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
@@ -617,8 +982,35 @@
                                     <input type="date" id="new-dob" class="w-full bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
                                 </div>
                                 <div class="flex gap-2">
-                                    <button type="button" id="btn-cancel-add" class="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-semibold">Batal</button>
+                                    <button type="button" id="btn-cancel-add-member" class="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-semibold">Batal</button>
                                     <button type="submit" class="flex-1 bg-primary text-white py-2 rounded-xl text-sm font-semibold">Simpan</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Panel Kategori -->
+                        <div class="bg-white rounded-[2rem] p-5 shadow-card mb-6">
+                            <h3 class="font-bold text-gray-800 mb-3">Pengaturan Kategori</h3>
+                            <div class="mb-4">
+                                ${categoriesListHTML}
+                            </div>
+                            
+                            <button id="btn-show-add-category" class="w-full py-2 rounded-xl border border-dashed border-gray-300 text-gray-500 font-semibold text-xs hover:border-primary hover:text-primary transition-colors">
+                                + Tambah Kategori Baru
+                            </button>
+                            
+                            <form id="form-add-category" class="hidden mt-3 pt-3 border-t border-gray-100">
+                                <div class="flex gap-2 mb-3">
+                                    <input type="text" id="new-cat-name" required placeholder="Nama Kategori (Cth: Listrik)" class="flex-1 bg-cream/50 border border-gray-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                                    <select id="new-cat-type" required class="w-1/3 bg-cream/50 border border-gray-100 rounded-xl px-2 py-2 text-xs focus:outline-none focus:border-primary">
+                                        <option value="pengeluaran">Pengeluaran</option>
+                                        <option value="pemasukan">Pemasukan</option>
+                                        <option value="tabungan">Tabungan</option>
+                                    </select>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button type="button" id="btn-cancel-add-category" class="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-xs font-semibold">Batal</button>
+                                    <button type="submit" class="flex-1 bg-primary text-white py-2 rounded-xl text-xs font-semibold">Simpan Kategori</button>
                                 </div>
                             </form>
                         </div>
@@ -677,10 +1069,10 @@
                     showLoadingOverlay();
                     setTimeout(() => {
                         if (!attemptLogin(email)) {
-                            alert("Email tidak ditemukan. Pastikan sudah didaftarkan oleh keluarga Anda.");
+                            customAlert("Email tidak ditemukan. Pastikan sudah didaftarkan oleh keluarga Anda.");
                         }
                         hideLoadingOverlay();
-                    }, 500); // Simulate brief network wait
+                    }, 500); 
                 });
             }
 
@@ -699,37 +1091,137 @@
         const attachAppListeners = (tab) => {
             if (tab === 'catat') {
                 const txForm = document.getElementById('tx-form');
+                const radioPengeluaran = document.getElementById('radio-pengeluaran');
+                const radioPemasukan = document.getElementById('radio-pemasukan');
+                const categorySelect = document.getElementById('tx-category');
+                
+                // Logika mengisi dropdown Kategori dinamis
+                const updateCategoryDropdown = (type) => {
+                    const familyCats = allCategories.filter(c => c.familyId === currentFamily.id && c.type === type);
+                    let html = '<option value="" disabled selected>-- Pilih Kategori --</option>';
+                    familyCats.forEach(c => html += `<option value="${c.name}">${c.name}</option>`);
+                    if(familyCats.length === 0) html += `<option value="" disabled>Belum ada kategori (Tambahkan di menu Profil)</option>`;
+                    categorySelect.innerHTML = html;
+                };
+
+                // Panggil pertama kali saat halaman Catat dimuat (default: pengeluaran)
+                updateCategoryDropdown('pengeluaran');
+
+                // Listener perubahan radio button
+                radioPengeluaran.addEventListener('change', () => updateCategoryDropdown('pengeluaran'));
+                radioPemasukan.addEventListener('change', () => updateCategoryDropdown('pemasukan'));
+
                 if (txForm) {
                     txForm.addEventListener('submit', (e) => {
                         e.preventDefault();
                         const type = document.querySelector('input[name="tx_type"]:checked').value;
+                        const category = document.getElementById('tx-category').value;
                         const amount = document.getElementById('tx-amount').value;
                         const desc = document.getElementById('tx-desc').value;
                         const date = document.getElementById('tx-date').value;
-                        handleAddTransaction(type, amount, date, desc);
+                        
+                        if(!category) {
+                            customAlert("Silakan pilih kategori transaksi terlebih dahulu!");
+                            return;
+                        }
+                        
+                        handleAddTransaction(type, category, amount, date, desc, 'beranda');
+                    });
+                }
+            } else if (tab === 'tabungan') {
+                const formTabungan = document.getElementById('form-tabungan');
+                if (formTabungan) {
+                    const tabCategorySelect = document.getElementById('tab-category');
+                    const updateTabCategoryDropdown = () => {
+                        const familyCats = allCategories.filter(c => c.familyId === currentFamily.id && c.type === 'tabungan');
+                        let html = '<option value="" disabled selected>-- Pilih Kategori --</option>';
+                        familyCats.forEach(c => html += `<option value="${c.name}">${c.name}</option>`);
+                        if(familyCats.length === 0) html += `<option value="" disabled>Belum ada kategori tabungan (Tambahkan di Profil)</option>`;
+                        if(tabCategorySelect) tabCategorySelect.innerHTML = html;
+                    };
+
+                    updateTabCategoryDropdown();
+
+                    formTabungan.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        const type = document.querySelector('input[name="tab_type"]:checked').value;
+                        const category = document.getElementById('tab-category').value;
+                        const amount = Number(document.getElementById('tab-amount').value);
+                        const desc = document.getElementById('tab-desc').value;
+                        const date = document.getElementById('tab-date').value;
+
+                        if(!category) {
+                            customAlert("Silakan pilih kategori tabungan terlebih dahulu!");
+                            return;
+                        }
+
+                        // Perhitungan validasi realtime
+                        const familyTx = allTransactions.filter(t => t.familyId === currentFamily.id);
+                        const pemasukan = familyTx.filter(t => t.type === 'pemasukan').reduce((sum, t) => sum + t.amount, 0);
+                        const pengeluaranKas = familyTx.filter(t => t.type === 'pengeluaran').reduce((sum, t) => sum + t.amount, 0);
+                        const tabMasuk = familyTx.filter(t => t.type === 'tabungan_masuk').reduce((sum, t) => sum + t.amount, 0);
+                        const tabKeluar = familyTx.filter(t => t.type === 'tabungan_keluar').reduce((sum, t) => sum + t.amount, 0);
+                        
+                        const saldoKas = pemasukan - pengeluaranKas - tabMasuk;
+                        const saldoTabungan = tabMasuk - tabKeluar;
+
+                        if (type === 'tabungan_masuk' && amount > saldoKas) {
+                            customAlert("Gagal! Saldo Kas Tersedia tidak cukup untuk ditabung.");
+                            return;
+                        }
+
+                        if (type === 'tabungan_keluar' && amount > saldoTabungan) {
+                            customAlert("Gagal! Saldo Tabungan Anda tidak mencukupi untuk ditarik.");
+                            return;
+                        }
+
+                        handleAddTransaction(type, category, amount, date, desc, 'tabungan');
                     });
                 }
             } else if (tab === 'profil') {
-                const btnShowAdd = document.getElementById('btn-show-add-member');
-                const formAdd = document.getElementById('form-add-member');
-                const btnCancelAdd = document.getElementById('btn-cancel-add');
+                // Logika Form Anggota
+                const btnShowAddMember = document.getElementById('btn-show-add-member');
+                const formAddMember = document.getElementById('form-add-member');
+                const btnCancelAddMember = document.getElementById('btn-cancel-add-member');
 
-                if (btnShowAdd && formAdd) {
-                    btnShowAdd.addEventListener('click', () => {
-                        btnShowAdd.classList.add('hidden');
-                        formAdd.classList.remove('hidden');
+                if (btnShowAddMember) {
+                    btnShowAddMember.addEventListener('click', () => {
+                        btnShowAddMember.classList.add('hidden');
+                        formAddMember.classList.remove('hidden');
                     });
-                    btnCancelAdd.addEventListener('click', () => {
-                        formAdd.classList.add('hidden');
-                        btnShowAdd.classList.remove('hidden');
+                    btnCancelAddMember.addEventListener('click', () => {
+                        formAddMember.classList.add('hidden');
+                        btnShowAddMember.classList.remove('hidden');
                     });
-                    formAdd.addEventListener('submit', (e) => {
+                    formAddMember.addEventListener('submit', (e) => {
                         e.preventDefault();
                         const name = document.getElementById('new-name').value;
                         const email = document.getElementById('new-email').value;
                         const status = document.getElementById('new-status').value;
                         const dob = document.getElementById('new-dob').value;
                         handleAddMember(email, name, dob, status);
+                    });
+                }
+
+                // Logika Form Kategori
+                const btnShowAddCategory = document.getElementById('btn-show-add-category');
+                const formAddCategory = document.getElementById('form-add-category');
+                const btnCancelAddCategory = document.getElementById('btn-cancel-add-category');
+
+                if (btnShowAddCategory) {
+                    btnShowAddCategory.addEventListener('click', () => {
+                        btnShowAddCategory.classList.add('hidden');
+                        formAddCategory.classList.remove('hidden');
+                    });
+                    btnCancelAddCategory.addEventListener('click', () => {
+                        formAddCategory.classList.add('hidden');
+                        btnShowAddCategory.classList.remove('hidden');
+                    });
+                    formAddCategory.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        const name = document.getElementById('new-cat-name').value;
+                        const type = document.getElementById('new-cat-type').value;
+                        handleAddCategory(name, type);
                     });
                 }
             }
@@ -745,6 +1237,9 @@
                 renderMainApp(tab);
             }
         });
+
+        document.addEventListener('editTx', (e) => handleEditTransaction(e.detail));
+        document.addEventListener('deleteTx', (e) => confirmDeleteTransaction(e.detail));
 
         document.addEventListener('logoutAction', () => {
             logout();
